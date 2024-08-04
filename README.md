@@ -1,2 +1,2 @@
 # AutoML-Solution
-simplifying the work for data scientists
+Simplifying the work for data scientists
