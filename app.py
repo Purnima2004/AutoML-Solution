@@ -86,7 +86,11 @@ theme_css = f"""
 .main .block-container {{
     padding: 2rem;
     border-radius: 15px;
+    border-width: 3px;
+    border-style: solid;
+    border-image: {light_mode_border if st.session_state.theme == 'light' else dark_mode_border} 1;
     box-shadow: 0 4px 12px rgba({0 if st.session_state.theme == 'light' else 255}, {0 if st.session_state.theme == 'light' else 255}, {0 if st.session_state.theme == 'light' else 255}, 0.1);
+    animation: {f"borderGlow 4s infinite" if st.session_state.theme == 'light' else f"darkBorderGlow 4s infinite"};
 }}
 
 /* Sidebar styling */
@@ -356,21 +360,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Sidebar for navigation
-st.sidebar.markdown("<span class='nav-title'>Navigation</span>", unsafe_allow_html=True)
-# Reduce sidebar nav title font size with CSS
-st.markdown("""
-<style>
-    .nav-title {
-        font-size: 1.1rem !important;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    /* Optionally reduce radio font size as well */
-    .stSidebar .stRadio label div[data-testid="stMarkdownContainer"] {
-        font-size: 0.97rem !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Data Upload", "Model Selection", "Training", "Results"])
 
 # Initialize session state variables if they don't exist
