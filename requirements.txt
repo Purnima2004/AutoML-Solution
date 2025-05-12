@@ -6,4 +6,4 @@ xgboost==1.7.5
 joblib==1.2.0
 matplotlib==3.7.1
 seaborn==0.12.2
-pillow>=11.0.0
+pillow>=9.3.0
