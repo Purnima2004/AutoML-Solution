@@ -26,7 +26,8 @@ This is my all-in-one AutoML web app built using Streamlit – designed to make 
 ## 🌈 App Preview
 Here’s a look at the UI:
 
-<!-- Replace this path with your actual image file location -->
+![image](https://github.com/user-attachments/assets/2e3329b6-90b8-45ee-8598-4a77f712e0fd)
+
 
 ## 🧑‍💻 How It Works (Quick Guide)
 - Go to Data Upload, add your CSV, and choose the target column
@@ -64,7 +65,6 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
-Now just follow the link Streamlit gives you and you're good to go!
 
 ## 📌 A Few Notes
 - Models and preprocessors are saved in models/ as .pkl files
