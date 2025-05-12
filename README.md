@@ -100,6 +100,6 @@ Feel free to fork or star the repo if you like it – and contributions are alwa
 
 ---
 
-After training, view results and download the model. Use the "Results" page to upload new data and get predictions. Feel free to fork or star the repo if you find it useful—contributions are always welcome! 😄
+After training, view results and download the model. Use the "Results" page to upload new data and get predictions. Feel free to fork or star the repo if you find it useful. Contributions are always welcome! 😄
 
 
