@@ -32,7 +32,8 @@ def toggle_theme():
     else:
         st.session_state.theme = 'light'
 
-# Create a better positioned theme toggle
+# Add spacing before the theme toggle button
+st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
 col1, col2 = st.columns([6, 1])
 with col2:
     current_theme_icon = "🌙" if st.session_state.theme == 'light' else "☀️"
@@ -359,9 +360,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Sidebar for navigation
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Data Upload", "Model Selection", "Training", "Results"])
+# Main page navigation under the title
+st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
+page = st.radio(
+    "Navigation",
+    ["Data Upload", "Model Selection", "Training", "Results"],
+    horizontal=True,
+    index=0,
+    key="main_nav"
+)
+st.markdown("</div>", unsafe_allow_html=True)
 
 # Initialize session state variables if they don't exist
 if 'data_uploaded' not in st.session_state:
