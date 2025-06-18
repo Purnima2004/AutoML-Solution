@@ -178,7 +178,7 @@ class AutoMLApp:
             st.info("Select at least one model")
             return
 
-        cv = st.slider("CV folds", 2, 10, 3)
+        cv_folds = st.slider("CV folds", 2, 10, 3)
         n_iter = st.slider("Random search iterations", 5, 50, 10)
 
         if st.button("Train Models 🚀"):
@@ -191,6 +191,8 @@ class AutoMLApp:
                     X_test=st.session_state.processed_data["X_test"],
                     y_test=st.session_state.processed_data["y_test"],
                     classes=st.session_state.processed_data["classes"],
+                    cv_folds=cv_folds,
+                    n_iter=n_iter,
                 )
             st.session_state.training_results = res
             st.session_state.models_trained = True
@@ -230,7 +232,7 @@ class AutoMLApp:
 
         best_name = st.session_state.training_results["best_model_name"]
         trainer: ModelTrainer = st.session_state.model_trainer
-        preds = trainer.predict(best_name, df_new)
+        preds = trainer.predict(best_name, df_new.to_numpy())
         st.download_button(
             "Download predictions CSV",
             data=pd.DataFrame({"prediction": preds}).to_csv(index=False),

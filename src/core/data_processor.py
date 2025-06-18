@@ -115,7 +115,7 @@ class DataProcessor:
                 f"Target column '{target_column}' not found in dataset."
             )
 
-        if df[target_column].isnull().all():
+        if df[target_column].isnull().sum() == len(df):
             raise ValueError(
                 f"Target column '{target_column}' contains only null values."
             )
@@ -254,9 +254,9 @@ class DataProcessor:
             logger.info(
                 f"Target encoded. Classes: {self.label_encoder.classes_}"
             )
-            return y_encoded
+            return np.asarray(y_encoded)
         else:
-            return y.values
+            return np.asarray(y)
 
     def split_data(
         self,
@@ -280,23 +280,48 @@ class DataProcessor:
         # Check if stratification is possible
         try:
             # Try stratified split first
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state, stratify=y
+            X_train_split, X_test_split, y_train_split, y_test_split = (
+                train_test_split(
+                    X,
+                    y,
+                    test_size=test_size,
+                    random_state=random_state,
+                    stratify=y,
+                )
             )
             logger.info("Used stratified train-test split")
         except ValueError:
             # Fall back to regular split if stratification fails
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state
+            X_train_split, X_test_split, y_train_split, y_test_split = (
+                train_test_split(
+                    X, y, test_size=test_size, random_state=random_state
+                )
             )
             logger.info(
                 "Used regular train-test split (stratification not possible)"
             )
 
-        logger.info(f"Training set: {X_train.shape[0]} samples")
-        logger.info(f"Test set: {X_test.shape[0]} samples")
+        # Type assertions to ensure proper types
+        X_train_df = (
+            X_train_split
+            if isinstance(X_train_split, pd.DataFrame)
+            else pd.DataFrame(X_train_split)
+        )
+        X_test_df = (
+            X_test_split
+            if isinstance(X_test_split, pd.DataFrame)
+            else pd.DataFrame(X_test_split)
+        )
 
-        return X_train, X_test, y_train, y_test
+        logger.info(f"Training set: {X_train_df.shape[0]} samples")
+        logger.info(f"Test set: {X_test_df.shape[0]} samples")
+
+        return (
+            X_train_df,
+            X_test_df,
+            np.asarray(y_train_split),
+            np.asarray(y_test_split),
+        )
 
     def fit_transform_data(
         self, X_train: pd.DataFrame, X_test: pd.DataFrame
@@ -324,7 +349,7 @@ class DataProcessor:
         )
         logger.info(f"Test shape: {X_test_transformed.shape}")
 
-        return X_train_transformed, X_test_transformed
+        return np.asarray(X_train_transformed), np.asarray(X_test_transformed)
 
     def get_feature_names(self) -> list:
         """
@@ -392,17 +417,27 @@ class DataProcessor:
             y = df[target_column]
 
             # Check class imbalance
+            if isinstance(y, pd.DataFrame):
+                y = y.iloc[:, 0]
             imbalance_info = self.check_class_imbalance(y)
 
             # Split data
             X_train, X_test, y_train, y_test = self.split_data(X, y, test_size)
 
             # Prepare target
-            y_train_encoded = self.prepare_target(y_train)
+            y_train_encoded = self.prepare_target(
+                pd.Series(y_train)
+                if isinstance(y_train, np.ndarray)
+                else y_train
+            )
             y_test_encoded = (
-                self.prepare_target(y_test)
+                self.prepare_target(
+                    pd.Series(y_test)
+                    if isinstance(y_test, np.ndarray)
+                    else y_test
+                )
                 if self.label_encoder
-                else y_test.values
+                else np.asarray(y_test)
             )
 
             # Create and fit preprocessor

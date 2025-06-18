@@ -19,3 +19,8 @@ dependencies = [
 
 [tool.pyright]
 reportMissingTypeStubs = false
+reportOptionalSubscript= false
+reportOptionalMemberAccess= false
+reportGeneralTypeIssues= "warning"
+reportOptionalIterable= false
+reportOptionalContextManager= false

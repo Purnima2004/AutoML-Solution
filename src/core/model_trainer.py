@@ -83,7 +83,8 @@ class ModelTrainer:
             raise ValueError(f"Model '{model_name}' not found in configuration")
 
         model_class, default_params = self.models_config[model_name]
-        param_grid = param_grid or default_params
+        if param_grid is None:
+            param_grid = default_params.copy()
 
         logger.info(f"Training {model_name}...")
         start_time = time.time()
@@ -105,7 +106,7 @@ class ModelTrainer:
 
             # Handle class imbalance for applicable models
             if hasattr(model, "class_weight") and len(np.unique(y_train)) > 1:
-                if (
+                if param_grid is not None and (
                     "class_weight" not in param_grid
                     and "classifier__class_weight" not in param_grid
                 ):
@@ -118,11 +119,12 @@ class ModelTrainer:
 
             # Calculate n_iter based on parameter grid size
             total_combinations = 1
-            for param_values in param_grid.values():
-                if isinstance(param_values, (list, tuple)):
-                    total_combinations *= len(param_values)
+            if param_grid is not None:
+                for param_values in param_grid.values():
+                    if isinstance(param_values, (list, tuple)):
+                        total_combinations *= len(param_values)
 
-            n_iter = min(n_iter, total_combinations)
+                n_iter = min(n_iter, total_combinations)
 
             # Perform hyperparameter search
             search = RandomizedSearchCV(
@@ -194,13 +196,13 @@ class ModelTrainer:
             metrics = {
                 "accuracy": accuracy_score(y_test, y_pred),
                 "precision": precision_score(
-                    y_test, y_pred, average="weighted", zero_division=0
+                    y_test, y_pred, average="weighted", zero_division="warn"
                 ),
                 "recall": recall_score(
-                    y_test, y_pred, average="weighted", zero_division=0
+                    y_test, y_pred, average="weighted", zero_division="warn"
                 ),
                 "f1_score": f1_score(
-                    y_test, y_pred, average="weighted", zero_division=0
+                    y_test, y_pred, average="weighted", zero_division="warn"
                 ),
             }
 
@@ -222,7 +224,7 @@ class ModelTrainer:
                 y_pred,
                 target_names=classes if classes is not None else None,
                 output_dict=True,
-                zero_division=0,
+                zero_division="warn",
             )
 
             # Confusion matrix
@@ -264,6 +266,8 @@ class ModelTrainer:
         preprocessor=None,
         param_grids: Optional[Dict] = None,
         classes: Optional[List] = None,
+        cv_folds: int = 3,
+        n_iter: int = 10,
     ) -> Dict[str, Any]:
         """
         Train and evaluate multiple models.
@@ -277,6 +281,8 @@ class ModelTrainer:
             preprocessor: Data preprocessor
             param_grids: Custom parameter grids for models
             classes: Class labels
+            cv_folds: Number of CV folds
+            n_iter: Number of iterations for RandomizedSearchCV
 
         Returns:
             Dict containing results for all models
@@ -296,7 +302,13 @@ class ModelTrainer:
                 # Train model
                 param_grid = param_grids.get(model_name)
                 training_result = self.train_single_model(
-                    model_name, X_train, y_train, preprocessor, param_grid
+                    model_name,
+                    X_train,
+                    y_train,
+                    preprocessor,
+                    param_grid,
+                    cv_folds,
+                    n_iter,
                 )
                 results["training_results"][model_name] = training_result
 
