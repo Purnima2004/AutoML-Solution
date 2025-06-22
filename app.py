@@ -21,6 +21,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 import time
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn.decomposition import PCA
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.svm import SVR
 
 # Set page config first
 st.set_page_config(
@@ -56,7 +63,7 @@ if 'model_trained' not in st.session_state:
 if 'evaluation_metrics' not in st.session_state:
     st.session_state.evaluation_metrics = None
 
-# Custom CSS for the background and content
+# Custom CSS 
 def set_background():
     st.markdown("""
     <style>
@@ -68,15 +75,7 @@ def set_background():
     }
     
     /* Main content area */
-    .main .block-container {
-        background-color: rgba(255, 255, 255, 0.85);
-        padding: 2rem;
-        border-radius: 15px;
-        margin: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
-    }
+    
     
     /* Sidebar */
     .stSidebar {
@@ -120,10 +119,9 @@ def set_background():
     </style>
     """, unsafe_allow_html=True)
 
-# Set the background
 set_background()
 
-# Custom CSS for the main content
+
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
@@ -231,37 +229,52 @@ def main():
     # Initialize page in session state if not exists
     if 'page' not in st.session_state:
         st.session_state.page = "🏠 Home"
+    if 'task_type' not in st.session_state:
+        st.session_state.task_type = "Supervised Learning"
     
     # Sidebar
     with st.sidebar:
         st.title("🤖 AutoML Pro")
         st.markdown("---")
-        
+        # Task selector
+        task_type = st.radio(
+            "Select Task Type",
+            ["Supervised Learning", "Unsupervised Learning"],
+            index=["Supervised Learning", "Unsupervised Learning"].index(st.session_state.task_type)
+        )
+        if task_type != st.session_state.task_type:
+            st.session_state.task_type = task_type
+            st.rerun()
         # Navigation
         page = st.radio(
             "Navigation",
             ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"],
             index=["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"].index(st.session_state.page) if st.session_state.page in ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"] else 0
         )
-        
-        # Update page in session state when sidebar changes
         if page != st.session_state.page:
             st.session_state.page = page
             st.rerun()
-            
         st.markdown("---")
-    
     # Display the current page
     if st.session_state.page == "🏠 Home":
         show_home()
     elif st.session_state.page == "📊 Data Upload":
         show_data_upload()
     elif st.session_state.page == "🔧 Model Training":
-        show_model_training()
+        if st.session_state.task_type == "Supervised Learning":
+            show_model_training()
+        else:
+            show_unsupervised_training()
     elif st.session_state.page == "📈 Results":
-        show_results()
+        if st.session_state.task_type == "Supervised Learning":
+            show_results()
+        else:
+            show_unsupervised_results()
     elif st.session_state.page == "🔮 Predict":
-        show_predict()
+        if st.session_state.task_type == "Supervised Learning":
+            show_predict()
+        else:
+            st.info("Prediction is not available for unsupervised learning.")
     elif st.session_state.page == "📚 Learn More":
         show_learn_more()
         
@@ -429,154 +442,384 @@ def preprocess_data(df, target_column):
     st.session_state.y_train = y_train
     st.session_state.y_test = y_test
     
+    # --- PCA Option ---
+    apply_pca = st.checkbox("Apply PCA for dimensionality reduction?")
+    if apply_pca:
+        max_components = min(500, X_train.shape[1]) if X_train.shape[1] > 2 else X_train.shape[1]
+        n_components = st.slider("Number of PCA components", 2, max_components, min(50, max_components))
+        pca = PCA(n_components=n_components)
+        st.session_state.pca = pca
+        st.session_state.pca_applied = True
+        st.info(f"PCA will be applied: reduced to {n_components} components.")
+    else:
+        st.session_state.pca = None
+        st.session_state.pca_applied = False
+    
     return X_train, X_test, y_train, y_test
 
 def show_data_upload():
     st.header("📊 Data Upload & Preprocessing")
     st.markdown("Upload your dataset and configure the preprocessing steps.")
-    
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    
-    if uploaded_file is not None:
-        try:
-            # Read the CSV file
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df = df
-            
-            # Display dataset info
-            st.success(f"File uploaded successfully! {df.shape[0]} rows × {df.shape[1]} columns")
-            
-            # Show sample data
-            with st.expander("View Sample Data", expanded=True):
-                st.dataframe(df.head())
-            
-            # Data overview
-            with st.expander("Data Overview"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**Columns:**", ", ".join(df.columns.tolist()))
-                    st.write("**Total Rows:**", df.shape[0])
-                    st.write("**Total Columns:**", df.shape[1])
-                
-                with col2:
-                    st.write("**Missing Values:**", df.isnull().sum().sum())
-                    st.write("**Duplicate Rows:**", df.duplicated().sum())
-            
-            # Select target column
-            target_column = st.selectbox(
-                "Select the target column (what you want to predict)",
-                options=df.columns.tolist(),
-                index=len(df.columns)-1 if len(df.columns) > 0 else 0
-            )
-            
-            if st.button("Preprocess Data", type="primary"):
-                with st.spinner("Preprocessing data..."):
-                    try:
-                        # Preprocess the data
-                        X_train, X_test, y_train, y_test = preprocess_data(df, target_column)
-                        
-                        # Show preprocessing summary
-                        st.success("Data preprocessed successfully!")
-                        st.write(f"Training set: {X_train.shape[0]} samples")
-                        st.write(f"Test set: {X_test.shape[0]} samples")
-                        
-                        # Show class distribution
-                        st.subheader("Class Distribution")
-                        class_dist = pd.DataFrame({
-                            'Count': y_train.value_counts(),
-                            'Percentage': y_train.value_counts(normalize=True) * 100
-                        })
-                        st.dataframe(class_dist)
-                        
-                        # Visualize class distribution
-                        fig = px.pie(
-                            class_dist, 
-                            values='Count', 
-                            names=class_dist.index,
-                            title='Class Distribution in Training Set',
-                            hole=0.3
+
+    if st.session_state.task_type == "Supervised Learning":
+        upload_mode = st.radio(
+            "How do you want to provide your data?",
+            ["Single CSV (auto split)", "Separate Train and Test CSVs"]
+        )
+        if upload_mode == "Single CSV (auto split)":
+            uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+            if uploaded_file is not None:
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    st.session_state.df = df
+                    st.success(f"File uploaded successfully! {df.shape[0]} rows × {df.shape[1]} columns")
+                    with st.expander("View Sample Data", expanded=True):
+                        st.dataframe(df.head())
+                    with st.expander("Data Overview"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Columns:**", ", ".join(df.columns.tolist()))
+                            st.write("**Total Rows:**", df.shape[0])
+                            st.write("**Total Columns:**", df.shape[1])
+                        with col2:
+                            st.write("**Missing Values:**", df.isnull().sum().sum())
+                            st.write("**Duplicate Rows:**", df.duplicated().sum())
+                    target_column = st.selectbox(
+                        "Select the target column (what you want to predict)",
+                        options=df.columns.tolist(),
+                        index=len(df.columns)-1 if len(df.columns) > 0 else 0
+                    )
+                    # Handle missing values in target column
+                    if df[target_column].isnull().sum() > 0:
+                        st.warning(f"Target column contains {df[target_column].isnull().sum()} missing values.")
+                        missing_option = st.radio(
+                            "How do you want to handle missing values in the target column?",
+                            ["Remove rows with missing target values", "Fill missing values with mean/median"]
                         )
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Enable model training
-                        st.session_state.data_preprocessed = True
-                        
-                    except Exception as e:
-                        st.error(f"Error during preprocessing: {str(e)}")
-                        st.session_state.data_preprocessed = False
-                        
-        except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
+                        if missing_option == "Remove rows with missing target values":
+                            n_before = len(df)
+                            df = df.dropna(subset=[target_column])
+                            n_after = len(df)
+                            st.info(f"Removed {n_before - n_after} rows with missing target values.")
+                        else:
+                            if pd.api.types.is_numeric_dtype(df[target_column]):
+                                fill_method = st.selectbox("Fill missing values with:", ["mean", "median"])
+                                if fill_method == "mean":
+                                    fill_value = df[target_column].mean()
+                                else:
+                                    fill_value = df[target_column].median()
+                                df[target_column] = df[target_column].fillna(fill_value)
+                                st.info(f"Filled missing values in target column with {fill_method}: {fill_value}")
+                            else:
+                                st.error("Filling missing values is only supported for numeric target columns.")
+                                return
+                    if st.button("Preprocess Data", type="primary"):
+                        with st.spinner("Preprocessing data..."):
+                            try:
+                                y = df[target_column]
+                                value_counts = y.value_counts()
+                                if value_counts.min() < 2:
+                                    stratify = None
+                                    st.warning("Some classes have only 1 sample. Stratified split is not possible.")
+                                else:
+                                    stratify = y
+                                X = df.drop(columns=[target_column])
+                                X_train, X_test, y_train, y_test = train_test_split(
+                                    X, y, test_size=0.2, random_state=42, stratify=stratify
+                                )
+                                st.session_state.X_train = X_train
+                                st.session_state.X_test = X_test
+                                st.session_state.y_train = y_train
+                                st.session_state.y_test = y_test
+                                st.session_state.target_column = target_column
+                                categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+                                numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+                                st.session_state.categorical_cols = categorical_cols
+                                st.session_state.numerical_cols = numerical_cols
+                                numerical_transformer = Pipeline(steps=[
+                                    ('imputer', SimpleImputer(strategy='median')),
+                                    ('scaler', StandardScaler())
+                                ])
+                                categorical_transformer = Pipeline(steps=[
+                                    ('imputer', SimpleImputer(strategy='most_frequent')),
+                                    ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+                                ])
+                                preprocessor = ColumnTransformer(
+                                    transformers=[
+                                        ('num', numerical_transformer, numerical_cols),
+                                        ('cat', categorical_transformer, categorical_cols)
+                                    ])
+                                st.session_state.preprocessor = preprocessor
+                                st.success("Data preprocessed successfully!")
+                                st.session_state.data_preprocessed = True
+                            except Exception as e:
+                                st.error(f"Error during preprocessing: {str(e)}")
+                                st.session_state.data_preprocessed = False
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+            # --- PCA Option (after preprocessing) ---
+            if st.session_state.get('data_preprocessed', False):
+                apply_pca = st.checkbox("Apply PCA for dimensionality reduction?")
+                if apply_pca:
+                    max_components = min(500, st.session_state.X_train.shape[1])
+                    n_components = st.slider("Number of PCA components", 2, max_components, min(50, max_components))
+                    pca = PCA(n_components=n_components)
+                    st.session_state.pca = pca
+                    st.session_state.pca_applied = True
+                    st.info(f"PCA will be applied: reduced to {n_components} components.")
+                else:
+                    st.session_state.pca = None
+                    st.session_state.pca_applied = False
+        elif upload_mode == "Separate Train and Test CSVs":
+            train_file = st.file_uploader("Upload your TRAIN CSV file", type="csv", key="train_csv")
+            test_file = st.file_uploader("Upload your TEST CSV file", type="csv", key="test_csv")
+            if train_file is not None and test_file is not None:
+                try:
+                    train_df = pd.read_csv(train_file)
+                    test_df = pd.read_csv(test_file)
+                    st.success(f"Train file: {train_df.shape[0]} rows × {train_df.shape[1]} columns")
+                    st.success(f"Test file: {test_df.shape[0]} rows × {test_df.shape[1]} columns")
+                    with st.expander("View Train Data", expanded=False):
+                        st.dataframe(train_df.head())
+                    with st.expander("View Test Data", expanded=False):
+                        st.dataframe(test_df.head())
+                    target_column_train = st.selectbox(
+                        "Select the target column in TRAIN file",
+                        options=train_df.columns.tolist(),
+                        index=len(train_df.columns)-1 if len(train_df.columns) > 0 else 0,
+                        key="target_train"
+                    )
+                    target_column_test = st.selectbox(
+                        "Select the target column in TEST file",
+                        options=test_df.columns.tolist(),
+                        index=len(test_df.columns)-1 if len(test_df.columns) > 0 else 0,
+                        key="target_test"
+                    )
+                    # Handle missing values in train target
+                    if train_df[target_column_train].isnull().sum() > 0:
+                        st.warning(f"Train target column contains {train_df[target_column_train].isnull().sum()} missing values.")
+                        missing_option_train = st.radio(
+                            "How do you want to handle missing values in the TRAIN target column?",
+                            ["Remove rows with missing target values", "Fill missing values with mean/median"],
+                            key="missing_option_train"
+                        )
+                        if missing_option_train == "Remove rows with missing target values":
+                            n_before = len(train_df)
+                            train_df = train_df.dropna(subset=[target_column_train])
+                            n_after = len(train_df)
+                            st.info(f"Removed {n_before - n_after} rows with missing target values in TRAIN.")
+                        else:
+                            if pd.api.types.is_numeric_dtype(train_df[target_column_train]):
+                                fill_method = st.selectbox("Fill missing values in TRAIN with:", ["mean", "median"], key="fill_method_train")
+                                if fill_method == "mean":
+                                    fill_value = train_df[target_column_train].mean()
+                                else:
+                                    fill_value = train_df[target_column_train].median()
+                                train_df[target_column_train] = train_df[target_column_train].fillna(fill_value)
+                                st.info(f"Filled missing values in TRAIN target column with {fill_method}: {fill_value}")
+                            else:
+                                st.error("Filling missing values is only supported for numeric target columns in TRAIN.")
+                                return
+                    # Handle missing values in test target
+                    if test_df[target_column_test].isnull().sum() > 0:
+                        st.warning(f"Test target column contains {test_df[target_column_test].isnull().sum()} missing values.")
+                        missing_option_test = st.radio(
+                            "How do you want to handle missing values in the TEST target column?",
+                            ["Remove rows with missing target values", "Fill missing values with mean/median"],
+                            key="missing_option_test"
+                        )
+                        if missing_option_test == "Remove rows with missing target values":
+                            n_before = len(test_df)
+                            test_df = test_df.dropna(subset=[target_column_test])
+                            n_after = len(test_df)
+                            st.info(f"Removed {n_before - n_after} rows with missing target values in TEST.")
+                        else:
+                            if pd.api.types.is_numeric_dtype(test_df[target_column_test]):
+                                fill_method = st.selectbox("Fill missing values in TEST with:", ["mean", "median"], key="fill_method_test")
+                                if fill_method == "mean":
+                                    fill_value = test_df[target_column_test].mean()
+                                else:
+                                    fill_value = test_df[target_column_test].median()
+                                test_df[target_column_test] = test_df[target_column_test].fillna(fill_value)
+                                st.info(f"Filled missing values in TEST target column with {fill_method}: {fill_value}")
+                            else:
+                                st.error("Filling missing values is only supported for numeric target columns in TEST.")
+                                return
+                    if st.button("Preprocess Data", type="primary"):
+                        with st.spinner("Preprocessing data..."):
+                            try:
+                                X_train = train_df.drop(columns=[target_column_train])
+                                y_train = train_df[target_column_train]
+                                X_test = test_df.drop(columns=[target_column_test])
+                                y_test = test_df[target_column_test]
+                                st.session_state.X_train = X_train
+                                st.session_state.X_test = X_test
+                                st.session_state.y_train = y_train
+                                st.session_state.y_test = y_test
+                                st.session_state.target_column = target_column_train
+                                categorical_cols = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
+                                numerical_cols = X_train.select_dtypes(include=['int64', 'float64']).columns.tolist()
+                                st.session_state.categorical_cols = categorical_cols
+                                st.session_state.numerical_cols = numerical_cols
+                                numerical_transformer = Pipeline(steps=[
+                                    ('imputer', SimpleImputer(strategy='median')),
+                                    ('scaler', StandardScaler())
+                                ])
+                                categorical_transformer = Pipeline(steps=[
+                                    ('imputer', SimpleImputer(strategy='most_frequent')),
+                                    ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+                                ])
+                                preprocessor = ColumnTransformer(
+                                    transformers=[
+                                        ('num', numerical_transformer, numerical_cols),
+                                        ('cat', categorical_transformer, categorical_cols)
+                                    ])
+                                st.session_state.preprocessor = preprocessor
+                                st.success("Data preprocessed successfully!")
+                                st.session_state.data_preprocessed = True
+                            except Exception as e:
+                                st.error(f"Error during preprocessing: {str(e)}")
+                                st.session_state.data_preprocessed = False
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+            # --- PCA Option (after preprocessing) ---
+            if st.session_state.get('data_preprocessed', False):
+                apply_pca = st.checkbox("Apply PCA for dimensionality reduction?")
+                if apply_pca:
+                    max_components = min(500, st.session_state.X_train.shape[1])
+                    n_components = st.slider("Number of PCA components", 2, max_components, min(50, max_components))
+                    pca = PCA(n_components=n_components)
+                    st.session_state.pca = pca
+                    st.session_state.pca_applied = True
+                    st.info(f"PCA will be applied: reduced to {n_components} components.")
+                else:
+                    st.session_state.pca = None
+                    st.session_state.pca_applied = False
+    else:
+        # Unsupervised learning: keep original logic
+        uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+        if uploaded_file is not None:
+            try:
+                df = pd.read_csv(uploaded_file)
+                st.session_state.df = df
+                st.success(f"File uploaded successfully! {df.shape[0]} rows × {df.shape[1]} columns")
+                with st.expander("View Sample Data", expanded=True):
+                    st.dataframe(df.head())
+                st.session_state.data_preprocessed = True
+            except Exception as e:
+                st.error(f"Error reading file: {str(e)}")
 
 def train_model(model_type, params):
     """Train the selected model with the given parameters"""
     try:
-        # Get preprocessed data
         X_train = st.session_state.X_train
         y_train = st.session_state.y_train
         preprocessor = st.session_state.preprocessor
-        
-        # Create the model pipeline
+        steps = [('preprocessor', preprocessor)]
+        # Add PCA step if applied
+        if st.session_state.get('pca_applied', False) and st.session_state.get('pca', None) is not None:
+            steps.append(('pca', st.session_state.pca))
+        # Add classifier/regressor step
         if model_type == "Random Forest":
-            model = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('classifier', RandomForestClassifier(
-            n_estimators=params.get('n_estimators', 100),
-            max_depth=params.get('max_depth', None),
-            min_samples_split=params.get('min_samples_split', 2),  # ADD THIS
-            min_samples_leaf=params.get('min_samples_leaf', 1),    # ADD THIS
-            random_state=42,
-            n_jobs=-1
-             ))
-        ])
-        
-        
+            steps.append(('classifier', RandomForestClassifier(
+                n_estimators=params.get('n_estimators', 100),
+                max_depth=params.get('max_depth', None),
+                min_samples_split=params.get('min_samples_split', 2),
+                min_samples_leaf=params.get('min_samples_leaf', 1),
+                random_state=42,
+                n_jobs=-1
+            )))
+        elif model_type == "Decision Tree":
+            steps.append(('classifier', DecisionTreeClassifier(
+                max_depth=params.get('max_depth', None),
+                min_samples_split=params.get('min_samples_split', 2),
+                min_samples_leaf=params.get('min_samples_leaf', 1),
+                random_state=42
+            )))
         elif model_type == "SVM":
-           model = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('classifier', SVC(
-            C=params.get('C', 1.0),
-            kernel=params.get('kernel', 'rbf'),
-            gamma=params.get('gamma', 'scale'),  # ADD THIS
-            probability=True,
-            random_state=42
-        ))
-])
+            steps.append(('classifier', SVC(
+                C=params.get('C', 1.0),
+                kernel=params.get('kernel', 'rbf'),
+                gamma=params.get('gamma', 'scale'),
+                probability=True,
+                random_state=42
+            )))
         elif model_type == "XGBoost":
-            model = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('classifier', XGBClassifier(
-            n_estimators=params.get('n_estimators', 100),
-            max_depth=params.get('max_depth', 3),
-            learning_rate=params.get('learning_rate', 0.1),
-            subsample=params.get('subsample', 1.0),  # ADD THIS
-            random_state=42,
-            n_jobs=-1
-    ))
-])
+            steps.append(('classifier', XGBClassifier(
+                n_estimators=params.get('n_estimators', 100),
+                max_depth=params.get('max_depth', 3),
+                learning_rate=params.get('learning_rate', 0.1),
+                subsample=params.get('subsample', 1.0),
+                random_state=42,
+                n_jobs=-1
+            )))
         elif model_type == "Neural Network":
-            model = Pipeline(steps=[
-                ('preprocessor', preprocessor),
-                ('classifier', MLPClassifier(
-                    hidden_layer_sizes=params.get('hidden_layer_sizes', (100,)),
-                    activation=params.get('activation', 'relu'),
-                    solver=params.get('solver', 'adam'),
-                    alpha=params.get('alpha', 0.0001),
-                    max_iter=params.get('max_iter', 200),
-                    random_state=42
-                ))
-            ])
-        
-        # Train the model
+            steps.append(('classifier', MLPClassifier(
+                hidden_layer_sizes=params.get('hidden_layer_sizes', (100,)),
+                activation=params.get('activation', 'relu'),
+                solver=params.get('solver', 'adam'),
+                alpha=params.get('alpha', 0.0001),
+                max_iter=params.get('max_iter', 200),
+                random_state=42
+            )))
+        elif model_type == "Logistic Regression":
+            steps.append(('classifier', LogisticRegression(
+                C=params.get('C', 1.0),
+                penalty=params.get('penalty', 'l2'),
+                solver=params.get('solver', 'lbfgs'),
+                max_iter=params.get('max_iter', 100),
+                random_state=42
+            )))
+        elif model_type == "Linear Regression":
+            steps.append(('regressor', LinearRegression()))
+        elif model_type == "Decision Tree Regressor":
+            steps.append(('regressor', DecisionTreeRegressor(
+                max_depth=params.get('max_depth', None),
+                min_samples_split=params.get('min_samples_split', 2),
+                min_samples_leaf=params.get('min_samples_leaf', 1),
+                random_state=42
+            )))
+        elif model_type == "Random Forest Regressor":
+            steps.append(('regressor', RandomForestRegressor(
+                n_estimators=params.get('n_estimators', 100),
+                max_depth=params.get('max_depth', None),
+                min_samples_split=params.get('min_samples_split', 2),
+                min_samples_leaf=params.get('min_samples_leaf', 1),
+                random_state=42,
+                n_jobs=-1
+            )))
+        elif model_type == "SVR":
+            steps.append(('regressor', SVR(
+                C=params.get('C', 1.0),
+                kernel=params.get('kernel', 'rbf'),
+                gamma=params.get('gamma', 'scale')
+            )))
+        elif model_type == "XGBoost Regressor":
+            steps.append(('regressor', XGBClassifier(
+                n_estimators=params.get('n_estimators', 100),
+                max_depth=params.get('max_depth', 3),
+                learning_rate=params.get('learning_rate', 0.1),
+                subsample=params.get('subsample', 1.0),
+                random_state=42,
+                n_jobs=-1
+            )))
+        elif model_type == "Neural Network Regressor":
+            steps.append(('regressor', MLPClassifier(
+                hidden_layer_sizes=params.get('hidden_layer_sizes', (100,)),
+                activation=params.get('activation', 'relu'),
+                solver=params.get('solver', 'adam'),
+                alpha=params.get('alpha', 0.0001),
+                max_iter=params.get('max_iter', 200),
+                random_state=42
+            )))
+        else:
+            raise ValueError(f"Model type '{model_type}' is not supported.")
+
+        model = Pipeline(steps=steps)
         model.fit(X_train, y_train)
-        
-        # Store the trained model
         st.session_state.model = model
         st.session_state.model_type = model_type
-        
-        # Evaluate the model
         evaluate_model(model)
-        
         return model
     except Exception as e:
         st.error(f"Error during model training: {str(e)}")
@@ -616,31 +859,37 @@ def evaluate_model(model):
 
 def show_model_training():
     st.header("🔧 Model Training")
-    
     if 'data_preprocessed' not in st.session_state:
         st.warning("Please upload and preprocess your data in the Data Upload section first.")
         return
-    
-    # Model selection
-    model_type = st.selectbox(
-        "Select Model Type",
-        ["Random Forest", "SVM", "XGBoost", "Neural Network"]
-    )
-    
-    # Display model description
+    supervised_type = st.selectbox("Problem Type", ["Classification", "Regression"])
+    if supervised_type == "Classification":
+        model_type = st.selectbox(
+            "Select Model Type",
+            ["Logistic Regression", "Decision Tree", "Random Forest", "SVM", "XGBoost", "Neural Network"]
+        )
+    else:
+        model_type = st.selectbox(
+            "Select Model Type",
+            ["Linear Regression", "Decision Tree Regressor", "Random Forest Regressor", "SVR", "XGBoost Regressor", "Neural Network Regressor"]
+        )
     model_descriptions = {
+        "Logistic Regression": "A linear model for binary or multiclass classification, interpretable and efficient.",
+        "Decision Tree": "Simple to understand and visualize, but can easily overfit.",
         "Random Forest": "An ensemble of decision trees, good for most classification tasks.",
         "SVM": "Powerful for high-dimensional spaces, works well with clear margin of separation.",
         "XGBoost": "Gradient boosting algorithm, often provides state-of-the-art results.",
-        "Neural Network": "Powerful for complex patterns but requires more data and computation."
+        "Neural Network": "Powerful for complex patterns but requires more data and computation.",
+        "Linear Regression": "A basic regression technique for modeling linear relationships.",
+        "Decision Tree Regressor": "Regression version of decision tree, can model non-linear relationships.",
+        "Random Forest Regressor": "Ensemble of decision trees for regression, reduces overfitting.",
+        "SVR": "Support Vector Regression, effective for high-dimensional regression tasks.",
+        "XGBoost Regressor": "Gradient boosting for regression, often provides top performance.",
+        "Neural Network Regressor": "Neural network for regression, captures complex patterns."
     }
-    st.markdown(f"**Description:** {model_descriptions[model_type]}")
-    
-    # Model-specific hyperparameters
+    st.markdown(f"**Description:** {model_descriptions.get(model_type, 'No description available.')}")
     st.markdown("### Hyperparameters")
-    
     params = {}
-    
     if model_type == "Random Forest":
         col1, col2 = st.columns(2)
         with col1:
@@ -649,7 +898,13 @@ def show_model_training():
         with col2:
             params['min_samples_split'] = st.slider("Min samples split", 2, 20, 2)
             params['min_samples_leaf'] = st.slider("Min samples leaf", 1, 10, 1)
-    
+    elif model_type == "Decision Tree":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['max_depth'] = st.slider("Max depth", 1, 30, 10)
+            params['min_samples_split'] = st.slider("Min samples split", 2, 20, 2)
+        with col2:
+            params['min_samples_leaf'] = st.slider("Min samples leaf", 1, 10, 1)
     elif model_type == "SVM":
         col1, col2 = st.columns(2)
         with col1:
@@ -657,7 +912,6 @@ def show_model_training():
             params['kernel'] = st.selectbox("Kernel", ["rbf", "linear", "poly", "sigmoid"])
         with col2:
             params['gamma'] = st.selectbox("Gamma", ["scale", "auto"], index=0)
-    
     elif model_type == "XGBoost":
         col1, col2 = st.columns(2)
         with col1:
@@ -666,7 +920,6 @@ def show_model_training():
         with col2:
             params['learning_rate'] = st.slider("Learning rate", 0.01, 1.0, 0.1, 0.01)
             params['subsample'] = st.slider("Subsample ratio", 0.1, 1.0, 1.0, 0.05)
-    
     elif model_type == "Neural Network":
         col1, col2 = st.columns(2)
         with col1:
@@ -680,22 +933,68 @@ def show_model_training():
             params['activation'] = st.selectbox("Activation function", ["relu", "tanh", "logistic"])
             params['solver'] = st.selectbox("Solver", ["adam", "sgd", "lbfgs"])
             params['alpha'] = st.slider("L2 penalty (alpha)", 0.0001, 0.1, 0.0001, 0.0001, format="%.4f")
-    
-    # Train button
+    elif model_type == "Logistic Regression":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['C'] = st.slider("Inverse regularization (C)", 0.01, 10.0, 1.0, 0.01)
+            params['penalty'] = st.selectbox("Penalty", ["l2", "none"])
+        with col2:
+            params['solver'] = st.selectbox("Solver", ["lbfgs", "saga"])
+            params['max_iter'] = st.slider("Max iterations", 50, 500, 100, 10)
+    elif model_type == "Linear Regression":
+        st.info("No hyperparameters to set for Linear Regression.")
+    elif model_type == "Decision Tree Regressor":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['max_depth'] = st.slider("Max depth", 1, 30, 10)
+            params['min_samples_split'] = st.slider("Min samples split", 2, 20, 2)
+        with col2:
+            params['min_samples_leaf'] = st.slider("Min samples leaf", 1, 10, 1)
+    elif model_type == "Random Forest Regressor":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['n_estimators'] = st.slider("Number of trees", 10, 500, 100, 10)
+            params['max_depth'] = st.slider("Max depth", 1, 30, 10)
+        with col2:
+            params['min_samples_split'] = st.slider("Min samples split", 2, 20, 2)
+            params['min_samples_leaf'] = st.slider("Min samples leaf", 1, 10, 1)
+    elif model_type == "SVR":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['C'] = st.slider("Regularization (C)", 0.01, 10.0, 1.0, 0.1)
+            params['kernel'] = st.selectbox("Kernel", ["rbf", "linear", "poly", "sigmoid"])
+        with col2:
+            params['gamma'] = st.selectbox("Gamma", ["scale", "auto"], index=0)
+    elif model_type == "XGBoost Regressor":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['n_estimators'] = st.slider("Number of trees", 10, 500, 100, 10)
+            params['max_depth'] = st.slider("Max depth", 1, 15, 3)
+        with col2:
+            params['learning_rate'] = st.slider("Learning rate", 0.01, 1.0, 0.1, 0.01)
+            params['subsample'] = st.slider("Subsample ratio", 0.1, 1.0, 1.0, 0.05)
+    elif model_type == "Neural Network Regressor":
+        col1, col2 = st.columns(2)
+        with col1:
+            hidden_layers = st.slider("Number of hidden layers", 1, 5, 1)
+            layer_sizes = []
+            for i in range(hidden_layers):
+                layer_size = st.slider(f"Neurons in layer {i+1}", 10, 200, 100, 10, key=f"nn_units_reg_{i}")
+                layer_sizes.append(layer_size)
+            params['hidden_layer_sizes'] = tuple(layer_sizes)
+        with col2:
+            params['activation'] = st.selectbox("Activation function", ["relu", "tanh", "logistic"])
+            params['solver'] = st.selectbox("Solver", ["adam", "sgd", "lbfgs"])
+            params['alpha'] = st.slider("L2 penalty (alpha)", 0.0001, 0.1, 0.0001, 0.0001, format="%.4f")
     if st.button("Train Model", type="primary", use_container_width=True):
         with st.spinner("Training model. This may take a while..."):
             start_time = time.time()
             model = train_model(model_type, params)
             training_time = time.time() - start_time
-            
             if model is not None:
                 st.session_state.model_trained = True
                 st.success(f"Model trained successfully in {training_time:.2f} seconds!")
-                
-                # Show evaluation metrics
                 show_model_evaluation()
-                
-                # Enable download buttons
                 show_model_download()
             else:
                 st.error("Model training failed. Please check the error message above.")
@@ -997,6 +1296,105 @@ def show_predict():
                         
         except Exception as e:
             st.error(f"Error reading the uploaded file: {str(e)}")
+
+# --- Unsupervised Learning ---
+def show_unsupervised_training():
+    st.header("🧩 Unsupervised Model Training")
+    if st.session_state.df is None:
+        st.warning("Please upload your data in the Data Upload section first.")
+        return
+    unsupervised_type = st.selectbox("Algorithm Type", ["Clustering", "Dimensionality Reduction", "Anomaly Detection"])
+    if unsupervised_type == "Clustering":
+        model_type = st.selectbox("Select Model", ["KMeans", "DBSCAN", "Agglomerative Clustering"])
+        if model_type == "KMeans":
+            n_clusters = st.slider("Number of clusters", 2, 10, 3)
+            if st.button("Train Model"):
+                model = KMeans(n_clusters=n_clusters, random_state=42)
+                X = st.session_state.df.select_dtypes(include=[np.number])
+                model.fit(X)
+                st.session_state.model = model
+                st.session_state.model_type = model_type
+                st.session_state.unsup_labels = model.labels_
+                st.success("KMeans clustering complete!")
+        elif model_type == "DBSCAN":
+            eps = st.slider("Epsilon (eps)", 0.1, 10.0, 0.5)
+            min_samples = st.slider("Min samples", 2, 20, 5)
+            if st.button("Train Model"):
+                model = DBSCAN(eps=eps, min_samples=min_samples)
+                X = st.session_state.df.select_dtypes(include=[np.number])
+                model.fit(X)
+                st.session_state.model = model
+                st.session_state.model_type = model_type
+                st.session_state.unsup_labels = model.labels_
+                st.success("DBSCAN clustering complete!")
+        elif model_type == "Agglomerative Clustering":
+            n_clusters = st.slider("Number of clusters", 2, 10, 3)
+            if st.button("Train Model"):
+                model = AgglomerativeClustering(n_clusters=n_clusters)
+                X = st.session_state.df.select_dtypes(include=[np.number])
+                model.fit(X)
+                st.session_state.model = model
+                st.session_state.model_type = model_type
+                st.session_state.unsup_labels = model.labels_
+                st.success("Agglomerative clustering complete!")
+    elif unsupervised_type == "Dimensionality Reduction":
+        model_type = st.selectbox("Select Model", ["PCA"])
+        n_components = st.slider("Number of components", 2, min(10, st.session_state.df.shape[1]), 2)
+        if st.button("Apply Dimensionality Reduction"):
+            model = PCA(n_components=n_components)
+            X = st.session_state.df.select_dtypes(include=[np.number])
+            X_reduced = model.fit_transform(X)
+            st.session_state.model = model
+            st.session_state.model_type = model_type
+            st.session_state.X_reduced = X_reduced
+            st.success("PCA complete!")
+    elif unsupervised_type == "Anomaly Detection":
+        model_type = st.selectbox("Select Model", ["Isolation Forest", "One-Class SVM"])
+        if model_type == "Isolation Forest":
+            contamination = st.slider("Contamination (outlier proportion)", 0.01, 0.5, 0.05)
+            if st.button("Train Model"):
+                model = IsolationForest(contamination=contamination, random_state=42)
+                X = st.session_state.df.select_dtypes(include=[np.number])
+                model.fit(X)
+                st.session_state.model = model
+                st.session_state.model_type = model_type
+                st.session_state.unsup_labels = model.predict(X)
+                st.success("Isolation Forest anomaly detection complete!")
+        elif model_type == "One-Class SVM":
+            nu = st.slider("Nu (anomaly proportion)", 0.01, 0.5, 0.05)
+            if st.button("Train Model"):
+                model = OneClassSVM(nu=nu)
+                X = st.session_state.df.select_dtypes(include=[np.number])
+                model.fit(X)
+                st.session_state.model = model
+                st.session_state.model_type = model_type
+                st.session_state.unsup_labels = model.predict(X)
+                st.success("One-Class SVM anomaly detection complete!")
+
+def show_unsupervised_results():
+    st.header("🧩 Unsupervised Results")
+    if 'model' not in st.session_state or st.session_state.model is None:
+        st.warning("Please train an unsupervised model first.")
+        return
+    model_type = st.session_state.model_type
+    if model_type in ["KMeans", "DBSCAN", "Agglomerative Clustering"]:
+        st.subheader("Cluster Assignments")
+        st.write(pd.Series(st.session_state.unsup_labels, name="Cluster").value_counts())
+        st.write("Cluster labels:", st.session_state.unsup_labels)
+        # Optionally, show a 2D plot if possible
+        X = st.session_state.df.select_dtypes(include=[np.number])
+        if X.shape[1] >= 2:
+            fig = px.scatter(X, x=X.columns[0], y=X.columns[1], color=st.session_state.unsup_labels.astype(str), title="Cluster Visualization")
+            st.plotly_chart(fig, use_container_width=True)
+    elif model_type == "PCA":
+        st.subheader("PCA Components")
+        st.write(st.session_state.X_reduced)
+        fig = px.scatter(x=st.session_state.X_reduced[:,0], y=st.session_state.X_reduced[:,1], title="PCA 2D Projection")
+        st.plotly_chart(fig, use_container_width=True)
+    elif model_type in ["Isolation Forest", "One-Class SVM"]:
+        st.subheader("Anomaly Detection Results")
+        st.write(pd.Series(st.session_state.unsup_labels, name="Anomaly").value_counts())
+        st.write("Anomaly labels:", st.session_state.unsup_labels)
 
 if __name__ == "__main__":
     main()
