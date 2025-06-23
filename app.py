@@ -69,52 +69,49 @@ def set_background():
     <style>
     /* Main app container */
     .stApp {
-        background: linear-gradient(135deg, #f5f0ff 0%, #e3e9ff 50%, #d0e3ff 100%);
-        background-attachment: fixed;
+        background: #000 !important;
+        color: #fff !important;
         min-height: 100vh;
     }
-    
-    /* Main content area */
-    
-    
     /* Sidebar */
     .stSidebar {
-        background-color: rgba(255, 255, 255, 0.9) !important;
+        background-color: #111 !important;
+        color: #fff !important;
     }
-    
     /* Ensure content is above the background */
     .stApp > div:first-child > div:first-child > div:first-child > div:first-child {
         z-index: 1 !important;
     }
-    
-    
-    /* Add glowing effect to elements */
-    .glow {
-        box-shadow: 0 0 20px rgba(100, 149, 255, 0.5);
-        transition: all 0.3s ease-in-out;
+    /* Card and feature backgrounds */
+    .feature-card, .stCard, .stMarkdown, .stText, .stDataFrame, .stTable, .stAlert, .stMetric, .stSelectbox, .stMultiselect, .stSlider, .stNumberInput, .stTextInput, .stTextArea, .stFileUploader, .stButton, .stRadio, .stCheckbox, .stExpander, .stTabs, .stForm, .stFormSubmitButton {
+        background: #181818 !important;
+        color: #fff !important;
+        border-radius: 10px !important;
     }
-    
-    .glow:hover {
-        box-shadow: 0 0 30px rgba(100, 149, 255, 0.8);
+    /* All text elements */
+    h1, h2, h3, h4, h5, h6, p, li, span, div, label {
+        color: #fff !important;
     }
-    
+    /* Input fields styling */
+    input, textarea {
+        background-color: #222 !important;
+        color: #fff !important;
+        border: 1px solid #444 !important;
+    }
     /* Custom scrollbar */
     ::-webkit-scrollbar {
         width: 10px;
     }
-    
     ::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.1);
+        background: #111;
         border-radius: 5px;
     }
-    
     ::-webkit-scrollbar-thumb {
-        background: rgba(100, 149, 255, 0.5);
+        background: #333;
         border-radius: 5px;
     }
-    
     ::-webkit-scrollbar-thumb:hover {
-        background: rgba(100, 149, 255, 0.7);
+        background: #555;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1046,36 +1043,40 @@ def show_model_evaluation():
     st.plotly_chart(fig, use_container_width=True)
     
     # Feature Importance (for tree-based models)
-    if hasattr(st.session_state.model, 'named_steps') and \
-       hasattr(st.session_state.model.named_steps['classifier'], 'feature_importances_'):
+    st.markdown("### Feature Importance")
+    model = st.session_state.model
+    feature_importance_supported = False
+    classifier = None
+    # Try to get the classifier or regressor from the pipeline
+    if hasattr(model, 'named_steps'):
+        classifier = model.named_steps.get('classifier', None)
+        if classifier is None:
+            classifier = model.named_steps.get('regressor', None)
+    # Check if the classifier supports feature_importances_
+    if classifier is not None and hasattr(classifier, 'feature_importances_'):
+        feature_importance_supported = True
+    if feature_importance_supported:
         try:
-            st.markdown("### Feature Importance")
-            
-            # Get feature names after preprocessing
-            preprocessor = st.session_state.model.named_steps['preprocessor']
-            
+            # Get the fitted preprocessor from the pipeline
+            preprocessor = model.named_steps['preprocessor']
             # Get feature names for numerical features
             numerical_features = st.session_state.numerical_cols
-            
             # Get feature names for categorical features (after one-hot encoding)
             categorical_features = []
             if 'cat' in preprocessor.named_transformers_:
                 ohe = preprocessor.named_transformers_['cat'].named_steps['onehot']
-                if hasattr(ohe, 'get_feature_names_out'):
+                # Only call get_feature_names_out if the encoder is fitted (has categories_)
+                if hasattr(ohe, 'get_feature_names_out') and hasattr(ohe, 'categories_'):
                     categorical_features = ohe.get_feature_names_out(st.session_state.categorical_cols).tolist()
-            
             # Combine all feature names
             all_features = numerical_features + categorical_features
-            
             # Get feature importances
-            importances = st.session_state.model.named_steps['classifier'].feature_importances_
-            
+            importances = classifier.feature_importances_
             # Create a DataFrame for visualization
             feature_importance = pd.DataFrame({
                 'Feature': all_features[:len(importances)],
                 'Importance': importances
             }).sort_values('Importance', ascending=False).head(20)  # Show top 20 features
-            
             # Plot feature importance
             fig = px.bar(
                 feature_importance,
@@ -1085,12 +1086,12 @@ def show_model_evaluation():
                 title='Top 20 Most Important Features',
                 labels={'Importance': 'Importance Score', 'Feature': 'Feature Name'}
             )
-            
             fig.update_layout(showlegend=False, yaxis={'categoryorder': 'total ascending'})
             st.plotly_chart(fig, use_container_width=True)
-            
         except Exception as e:
             st.warning(f"Could not compute feature importance: {str(e)}")
+    else:
+        st.info("Feature importance is only available for tree-based models like Random Forest, Decision Tree, or XGBoost.")
 
 def show_model_download():
     """Display download buttons for the trained model and preprocessor"""
