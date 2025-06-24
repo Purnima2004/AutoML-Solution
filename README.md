@@ -65,7 +65,7 @@ Whether you're a student, data scientist, or business analyst, this app helps yo
 ---
 
 ## 🌈 App Preview
-![video](AutoML Pro demo (1).mov)
+![image](https://github.com/user-attachments/assets/2e3329b6-90b8-45ee-8598-4a77f712e0fd)
 
 ---
 

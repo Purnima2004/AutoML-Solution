@@ -67,51 +67,67 @@ if 'evaluation_metrics' not in st.session_state:
 def set_background():
     st.markdown("""
     <style>
-    /* Main app container */
+    /* Light mode (default) */
     .stApp {
-        background: #000 !important;
-        color: #fff !important;
+        background-image: radial-gradient(circle 248px at center, #16d9e3 0%, #30c7ec 47%, #46aef7 100%);
+        background-attachment: fixed;
         min-height: 100vh;
+        color: #1e40af;
     }
-    /* Sidebar */
+    /* Sidebar (light) */
     .stSidebar {
-        background-color: #111 !important;
+        background-color: rgba(255, 255, 255, 0.9) !important;
+    }
+    /* Dark mode */
+    [data-theme="dark"] .stApp {
+        background-image: radial-gradient(circle 248px at center, #16d9e3 0%, #30c7ec 47%, #46aef7 100%);
+        background-attachment: fixed;
+        min-height: 100vh;
         color: #fff !important;
+    }
+    [data-theme="dark"] .stSidebar {
+        background-color: rgba(30, 36, 50, 0.95) !important;
+    }
+    [data-theme="dark"] .main-title, [data-theme="dark"] .feature-icon, [data-theme="dark"] .feature-card, [data-theme="dark"] .sub-title {
+        color: #fff !important;
+        background: none !important;
+        -webkit-text-fill-color: #fff !important;
     }
     /* Ensure content is above the background */
     .stApp > div:first-child > div:first-child > div:first-child > div:first-child {
         z-index: 1 !important;
     }
-    /* Card and feature backgrounds */
-    .feature-card, .stCard, .stMarkdown, .stText, .stDataFrame, .stTable, .stAlert, .stMetric, .stSelectbox, .stMultiselect, .stSlider, .stNumberInput, .stTextInput, .stTextArea, .stFileUploader, .stButton, .stRadio, .stCheckbox, .stExpander, .stTabs, .stForm, .stFormSubmitButton {
-        background: #181818 !important;
-        color: #fff !important;
-        border-radius: 10px !important;
+    /* Add glowing effect to elements */
+    .glow {
+        box-shadow: 0 0 20px rgba(100, 149, 255, 0.5);
+        transition: all 0.3s ease-in-out;
     }
-    /* All text elements */
-    h1, h2, h3, h4, h5, h6, p, li, span, div, label {
-        color: #fff !important;
-    }
-    /* Input fields styling */
-    input, textarea {
-        background-color: #222 !important;
-        color: #fff !important;
-        border: 1px solid #444 !important;
+    .glow:hover {
+        box-shadow: 0 0 30px rgba(100, 149, 255, 0.8);
     }
     /* Custom scrollbar */
     ::-webkit-scrollbar {
         width: 10px;
     }
     ::-webkit-scrollbar-track {
-        background: #111;
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 5px;
     }
     ::-webkit-scrollbar-thumb {
-        background: #333;
+        background: rgba(100, 149, 255, 0.5);
         border-radius: 5px;
     }
     ::-webkit-scrollbar-thumb:hover {
-        background: #555;
+        background: rgba(100, 149, 255, 0.7);
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-track {
+        background: rgba(30, 36, 50, 0.2);
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-thumb {
+        background: rgba(100, 149, 255, 0.3);
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+        background: rgba(100, 149, 255, 0.5);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -259,17 +275,17 @@ def main():
         show_data_upload()
     elif st.session_state.page == "🔧 Model Training":
         if st.session_state.task_type == "Supervised Learning":
-            show_model_training()
+           show_model_training()
         else:
             show_unsupervised_training()
     elif st.session_state.page == "📈 Results":
         if st.session_state.task_type == "Supervised Learning":
-            show_results()
+           show_results()
         else:
             show_unsupervised_results()
     elif st.session_state.page == "🔮 Predict":
         if st.session_state.task_type == "Supervised Learning":
-            show_predict()
+           show_predict()
         else:
             st.info("Prediction is not available for unsupervised learning.")
     elif st.session_state.page == "📚 Learn More":
@@ -719,12 +735,12 @@ def train_model(model_type, params):
         # Add classifier/regressor step
         if model_type == "Random Forest":
             steps.append(('classifier', RandomForestClassifier(
-                n_estimators=params.get('n_estimators', 100),
-                max_depth=params.get('max_depth', None),
+            n_estimators=params.get('n_estimators', 100),
+            max_depth=params.get('max_depth', None),
                 min_samples_split=params.get('min_samples_split', 2),
                 min_samples_leaf=params.get('min_samples_leaf', 1),
-                random_state=42,
-                n_jobs=-1
+            random_state=42,
+            n_jobs=-1
             )))
         elif model_type == "Decision Tree":
             steps.append(('classifier', DecisionTreeClassifier(
@@ -735,29 +751,29 @@ def train_model(model_type, params):
             )))
         elif model_type == "SVM":
             steps.append(('classifier', SVC(
-                C=params.get('C', 1.0),
-                kernel=params.get('kernel', 'rbf'),
+            C=params.get('C', 1.0),
+            kernel=params.get('kernel', 'rbf'),
                 gamma=params.get('gamma', 'scale'),
-                probability=True,
-                random_state=42
+            probability=True,
+            random_state=42
             )))
         elif model_type == "XGBoost":
             steps.append(('classifier', XGBClassifier(
-                n_estimators=params.get('n_estimators', 100),
-                max_depth=params.get('max_depth', 3),
-                learning_rate=params.get('learning_rate', 0.1),
+            n_estimators=params.get('n_estimators', 100),
+            max_depth=params.get('max_depth', 3),
+            learning_rate=params.get('learning_rate', 0.1),
                 subsample=params.get('subsample', 1.0),
-                random_state=42,
-                n_jobs=-1
+            random_state=42,
+            n_jobs=-1
             )))
         elif model_type == "Neural Network":
             steps.append(('classifier', MLPClassifier(
-                hidden_layer_sizes=params.get('hidden_layer_sizes', (100,)),
-                activation=params.get('activation', 'relu'),
-                solver=params.get('solver', 'adam'),
-                alpha=params.get('alpha', 0.0001),
-                max_iter=params.get('max_iter', 200),
-                random_state=42
+                    hidden_layer_sizes=params.get('hidden_layer_sizes', (100,)),
+                    activation=params.get('activation', 'relu'),
+                    solver=params.get('solver', 'adam'),
+                    alpha=params.get('alpha', 0.0001),
+                    max_iter=params.get('max_iter', 200),
+                    random_state=42
             )))
         elif model_type == "Logistic Regression":
             steps.append(('classifier', LogisticRegression(
@@ -861,8 +877,8 @@ def show_model_training():
         return
     supervised_type = st.selectbox("Problem Type", ["Classification", "Regression"])
     if supervised_type == "Classification":
-        model_type = st.selectbox(
-            "Select Model Type",
+        model_type = st.selectbox( 
+        "Select Model Type",
             ["Logistic Regression", "Decision Tree", "Random Forest", "SVM", "XGBoost", "Neural Network"]
         )
     else:
@@ -1065,8 +1081,8 @@ def show_model_evaluation():
             categorical_features = []
             if 'cat' in preprocessor.named_transformers_:
                 ohe = preprocessor.named_transformers_['cat'].named_steps['onehot']
-                # Only call get_feature_names_out if the encoder is fitted (has categories_)
                 if hasattr(ohe, 'get_feature_names_out') and hasattr(ohe, 'categories_'):
+                    # Only call get_feature_names_out if the encoder is fitted
                     categorical_features = ohe.get_feature_names_out(st.session_state.categorical_cols).tolist()
             # Combine all feature names
             all_features = numerical_features + categorical_features
