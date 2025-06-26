@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
 from xgboost import XGBClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
@@ -102,8 +103,7 @@ def set_background():
     <style>
     /* Light mode (default) */
     .stApp {
-        background-image: radial-gradient(circle 248px at center, #16d9e3 0%, #30c7ec 47%, #46aef7 100%);
-        background-attachment: fixed;
+        background-image: linear-gradient(to top, #fbc2eb 0%, #a6c1ee 100%);
         min-height: 100vh;
         color: #1e40af;
     }
@@ -311,7 +311,7 @@ def main():
         # Navigation
         page = st.radio(
             "Navigation",
-            ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "�� Results", "🔮 Predict", "📚 Learn More"],
+            ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"],
             index=["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"].index(st.session_state.page) if st.session_state.page in ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"] else 0
         )
         if page != st.session_state.page:
@@ -499,9 +499,13 @@ def preprocess_data(df, target_column):
         X, y, test_size=0.2, random_state=42, stratify=y if len(y.unique()) > 2 else y
     )
     
-    # Store data in session state
-    st.session_state.X_train = X_train
-    st.session_state.X_test = X_test
+    # Label encode if needed
+    if y_train.dtype == 'O' or y_train.dtype.name == 'category':
+        le = LabelEncoder()
+        y_train = le.fit_transform(y_train)
+        y_test = le.transform(y_test)
+        st.session_state.label_encoder = le
+    # Store back in session state
     st.session_state.y_train = y_train
     st.session_state.y_test = y_test
     
@@ -579,17 +583,17 @@ def show_data_upload():
                     if st.button("Preprocess Data", type="primary"):
                         with st.spinner("Preprocessing data..."):
                             try:
-                                y = df[target_column]
-                                value_counts = y.value_counts()
-                                if value_counts.min() < 2:
-                                    stratify = None
-                                    st.warning("Some classes have only 1 sample. Stratified split is not possible.")
-                                else:
-                                    stratify = y
                                 X = df.drop(columns=[target_column])
+                                y = df[target_column]
                                 X_train, X_test, y_train, y_test = train_test_split(
-                                    X, y, test_size=0.2, random_state=42, stratify=stratify
+                                    X, y, test_size=0.2, random_state=42, stratify=y
                                 )
+                                # Label encode if needed
+                                if y_train.dtype == 'O' or y_train.dtype.name == 'category':
+                                    le = LabelEncoder()
+                                    y_train = le.fit_transform(y_train)
+                                    y_test = le.transform(y_test)
+                                    st.session_state.label_encoder = le
                                 st.session_state.X_train = X_train
                                 st.session_state.X_test = X_test
                                 st.session_state.y_train = y_train
@@ -715,6 +719,12 @@ def show_data_upload():
                                 y_train = train_df[target_column_train]
                                 X_test = test_df.drop(columns=[target_column_test])
                                 y_test = test_df[target_column_test]
+                                # Label encode if needed
+                                if y_train.dtype == 'O' or y_train.dtype.name == 'category':
+                                    le = LabelEncoder()
+                                    y_train = le.fit_transform(y_train)
+                                    y_test = le.transform(y_test)
+                                    st.session_state.label_encoder = le
                                 st.session_state.X_train = X_train
                                 st.session_state.X_test = X_test
                                 st.session_state.y_train = y_train
@@ -893,17 +903,23 @@ def evaluate_model(model):
     try:
         X_test = st.session_state.X_test
         y_test = st.session_state.y_test
-        
-        # Make predictions
         y_pred = model.predict(X_test)
+        # For classification, y_pred should be integer or string labels
+        model_type = st.session_state.get('model_type', '')
+        # If user selected regressor for classification
+        if (not np.issubdtype(y_test.dtype, np.floating)) and (np.issubdtype(y_pred.dtype, np.floating)) and ("Regressor" in model_type or model_type in ["Linear Regression"]):
+            st.error("Model output is continuous, but classification metrics were requested. Please select a classifier for classification tasks.")
+            return False
+        # If user selected classifier for regression
+        if (np.issubdtype(y_test.dtype, np.floating)) and (not np.issubdtype(y_pred.dtype, np.floating)) and ("Regressor" not in model_type and model_type not in ["Linear Regression"]):
+            st.error("Model output is discrete, but regression metrics were requested. Please select a regressor for regression tasks.")
+            return False
         y_pred_proba = model.predict_proba(X_test)[:, 1] if hasattr(model, 'predict_proba') else None
-        
         # Calculate metrics
         accuracy = accuracy_score(y_test, y_pred)
         precision = precision_score(y_test, y_pred, average='weighted')
         recall = recall_score(y_test, y_pred, average='weighted')
         f1 = f1_score(y_test, y_pred, average='weighted')
-        
         # Store metrics
         st.session_state.evaluation_metrics = {
             'accuracy': accuracy,
@@ -914,7 +930,6 @@ def evaluate_model(model):
             'y_pred': y_pred,
             'y_pred_proba': y_pred_proba
         }
-        
         return True
     except Exception as e:
         st.error(f"Error during model evaluation: {str(e)}")
@@ -1052,6 +1067,13 @@ def show_model_training():
     if st.button("Train Model", type="primary", use_container_width=True):
         with st.spinner("Training model. This may take a while..."):
             start_time = time.time()
+            # In show_model_training(), before training, check if the selected model matches the problem type
+            if supervised_type == "Classification" and "Regressor" in model_type:
+                st.error("You selected a regression model for a classification problem. Please select a classifier.")
+                return
+            if supervised_type == "Regression" and ("Regressor" not in model_type and model_type not in ["Linear Regression"]):
+                st.error("You selected a classification model for a regression problem. Please select a regressor.")
+                return
             model = train_model(model_type, params)
             training_time = time.time() - start_time
             if model is not None:
@@ -1093,8 +1115,8 @@ def show_model_evaluation():
     fig = px.imshow(
         cm,
         labels=dict(x="Predicted", y="Actual", color="Count"),
-        x=sorted(metrics['y_true'].unique()),
-        y=sorted(metrics['y_true'].unique()),
+        x=sorted(np.unique(metrics['y_true'])),
+        y=sorted(np.unique(metrics['y_true'])),
         text_auto=True,
         aspect="auto",
         color_continuous_scale='Blues'
@@ -1265,7 +1287,11 @@ def show_predict():
                 st.markdown("### Prediction Result")
                 
                 # Show predicted class
-                st.metric("Predicted Class", str(prediction[0]))
+                if 'label_encoder' in st.session_state:
+                    pred_label = st.session_state.label_encoder.inverse_transform([prediction[0]])[0]
+                    st.metric("Predicted Class", str(pred_label))
+                else:
+                    st.metric("Predicted Class", str(prediction[0]))
                 
                 # Show prediction probabilities if available
                 if prediction_proba is not None:
