@@ -1,8 +1,8 @@
 [server]
 headless = true
-port = 10000
+port = 8501
 enableCORS = false
 address = "0.0.0.0"
 
 [theme]
-base = "light" 
+base = "light"
