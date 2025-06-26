@@ -126,14 +126,6 @@ streamlit run app.py
 ### **Local Machine**
 - Follow the setup steps above. The app will open in your browser at `localhost:8501`.
 
-### **Render (Recommended for Public Sharing)**
-1. Push your code to a GitHub repository.
-2. Go to [Render.com](https://render.com/) and create a new Web Service.
-3. Connect your repo and set:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
-4. Deploy and get a public URL to share your app!
-
 ### **Streamlit Community Cloud**
 - Go to [streamlit.io/cloud](https://streamlit.io/cloud), connect your repo, and deploy for free.
 
