@@ -5,4 +5,10 @@ enableCORS = false
 address = "0.0.0.0"
 
 [theme]
-base = "light"
+[theme]
+base = "dark"
+primaryColor = "#1f77b4"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#fafafa"
+font = "sans serif"
