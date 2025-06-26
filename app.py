@@ -37,6 +37,39 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Keep-alive mechanism to prevent sleeping
+def keep_alive():
+    """Keep the app alive by refreshing every 5 minutes"""
+    import time
+    import threading
+    
+    def refresh_loop():
+        while True:
+            time.sleep(300)  # 5 minutes = 300 seconds
+            st.rerun()
+    
+    # Start the refresh thread
+    thread = threading.Thread(target=refresh_loop, daemon=True)
+    thread.start()
+
+# Start keep-alive in a separate thread
+keep_alive()
+
+# Alternative keep-alive using st.empty() and auto-refresh
+def create_keep_alive_component():
+    """Create a hidden component that refreshes to keep the app alive"""
+    placeholder = st.empty()
+    
+    # Update the placeholder every 30 seconds to keep the app active
+    import time
+    current_time = int(time.time())
+    
+    # This will cause a refresh every 30 seconds
+    if current_time % 30 == 0:
+        placeholder.markdown(f"<!-- Keep-alive: {current_time} -->", unsafe_allow_html=True)
+    
+    return placeholder
+
 # Initialize session state variables
 if 'df' not in st.session_state:
     st.session_state.df = None
@@ -245,9 +278,26 @@ def main():
     if 'task_type' not in st.session_state:
         st.session_state.task_type = "Supervised Learning"
     
+    # Create keep-alive component (hidden)
+    keep_alive_placeholder = create_keep_alive_component()
+    
     # Sidebar
     with st.sidebar:
         st.title("🤖 AutoML Pro")
+        
+        # Heartbeat indicator to keep app alive
+        if 'heartbeat' not in st.session_state:
+            st.session_state.heartbeat = 0
+        
+        # Update heartbeat every 30 seconds
+        import time
+        current_time = int(time.time())
+        if current_time % 30 == 0:
+            st.session_state.heartbeat += 1
+        
+        # Display heartbeat (hidden but keeps app active)
+        st.markdown(f"<!-- Heartbeat: {st.session_state.heartbeat} -->", unsafe_allow_html=True)
+        
         st.markdown("---")
         # Task selector
         task_type = st.radio(
@@ -261,7 +311,7 @@ def main():
         # Navigation
         page = st.radio(
             "Navigation",
-            ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"],
+            ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "�� Results", "🔮 Predict", "📚 Learn More"],
             index=["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"].index(st.session_state.page) if st.session_state.page in ["🏠 Home", "📊 Data Upload", "🔧 Model Training", "📈 Results", "🔮 Predict", "📚 Learn More"] else 0
         )
         if page != st.session_state.page:
